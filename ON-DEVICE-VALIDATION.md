@@ -414,10 +414,29 @@ the modified schedules died sooner than the shipped one (about 40 s against
 measurement tooling was kept.
 
 **The remaining blocker is not schedule tuning.** Golden Freddy has to be seen
-rather than prevented, and the phone has no working way to see him. The target
-mode is also still out of reach: `NIGHT` accepts only `continue` or `6th`, and
-Custom Night -- where 10/20 lives -- is locked behind beating 6th Night, so
-every trial here is a proxy.
+rather than prevented, and he cannot be calibrated on the night we are allowed
+to run.
+
+His rate splits in opposite directions across the two nights, which is the
+whole problem:
+
+- **10/20 is a coin flip.** Custom Night sets his AI to 20, g830 caps it at 10,
+  and g336 rolls `Random(20) < AI` on every 5 s interval with the cams up. That
+  is why the blind flick is load-bearing rather than paranoid.
+- **6th Night is rare.** g804 zeroes his AI only *below* night 6, so he is not
+  locked out of the runnable night -- but his night-6 AI value is **not
+  sourced here**, and g684 puts a night-6 AI bump at 2 AM. `goldenscan.py` over
+  the 138 s trial found no gold cluster at all (peak 0.0026 against a mean of
+  0.0014, i.e. flat), and that run died at about 1 AM, before the bump.
+
+So there is no known-positive frame on disk, which means the detector cannot be
+thresholded and a null result cannot be told apart from a broken detector.
+`goldenscan.py` is committed as the instrument, not as a working classifier.
+
+The target mode is out of reach for the same reason it always was: `NIGHT`
+accepts only `continue` or `6th`, and Custom Night -- where 10/20 lives -- is
+locked behind beating 6th Night, so every trial here is a proxy for a mode we
+cannot enter and cannot yet observe the deciding character in.
 
 ## Next steps
 

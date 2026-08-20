@@ -15,6 +15,9 @@ NIGHT="${NIGHT:-6th}"
 DEBUG_OVERLAYS="${DEBUG_OVERLAYS:-1}"
 GRADE_RUN="${GRADE_RUN:-1}"
 PRESS_MODE="${PRESS_MODE:-fast-swipe}"
+# Run the Balloon Boy mask response every N cycles; 0 is the shipped blind
+# schedule, which has no answer to him. See the block in the driver.
+BB_PERIOD="${BB_PERIOD:-0}"
 WATCHDOG_INTERVAL="${WATCHDOG_INTERVAL:-0.25}"
 WATCHDOG_CAPTURE_TIMEOUT="${WATCHDOG_CAPTURE_TIMEOUT:-0.8}"
 FOCUS_WATCHDOG_INTERVAL="${FOCUS_WATCHDOG_INTERVAL:-0.10}"
@@ -60,6 +63,9 @@ esac
 case "$PRESS_MODE" in
   swipe|tap|async-swipe|fast-swipe) ;;
   *) echo "PRESS_MODE must be swipe, tap, async-swipe, or fast-swipe"; exit 2 ;;
+esac
+case "$BB_PERIOD" in
+  ''|*[!0-9]*) echo "BB_PERIOD must be a non-negative integer"; exit 2 ;;
 esac
 for setting in WATCHDOG_INTERVAL WATCHDOG_CAPTURE_TIMEOUT FOCUS_WATCHDOG_INTERVAL; do
   setting_value="${!setting}"
@@ -240,13 +246,14 @@ REC=$!
 RECORDING_STARTED=1
 
 # Positional coordinates keep this remote program literal and auditable.
-adb shell sh -s -- "$REMOTE_PIDFILE" "$CYCLES" "$PRESS_MODE" \
+adb shell sh -s -- "$REMOTE_PIDFILE" "$CYCLES" "$PRESS_MODE" "$BB_PERIOD" \
   $TAP_MUTE $TAP_MONITOR $TAP_MASK $TAP_CAM_LIGHT $TAP_HALL $WIND \
   $TAP_CAM10 $TAP_CAM04 $TAP_CAM07 $TAP_CAM11 <<'REMOTE' &
 set -eu
 PIDFILE=$1; shift
 CYCLES=$1; shift
 PRESS_MODE=$1; shift
+BB_PERIOD=$1; shift
 MUTE_X=$1; MUTE_Y=$2; shift 2
 MONITOR_X=$1; MONITOR_Y=$2; shift 2
 MASK_X=$1; MASK_Y=$2; shift 2

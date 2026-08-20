@@ -177,6 +177,20 @@ export const STALLED_AI = 15;
 // 3/4 rate. (One written guide states (AI+1)/20; TheBones5 and jerakaigamez both
 // state 75% at 15 AI, so this is the formula used here.)
 export const MO_CHANCE = (ai) => ai / 20;
+// ...but NOT for the Puppet. The dump has three different comparison forms and
+// they are not all the same probability [SOURCED: 03-04-Office event sheet]:
+//
+//   Random(20) + 1 <= AI   g333-335 (Withereds), the Toy trio, Paper Pals
+//   Random(20)      < AI   g336 Golden Freddy, `new Foxy` (Mangle), Balloon Boy
+//   Random(20)     <= AI   g494-497 `Sockpuppet AI`
+//
+// Clickteam's Random(N) returns 0..N-1, so the first two are both exactly
+// AI/20 -- `1..20 <= AI` and `0..19 < AI` each pass on AI of twenty values.
+// The third passes on AI+1 of them. The Puppet is the only character rolled
+// with a bare `<=`, and at his AI of 15 that is 16/20 = 0.80 rather than
+// 0.75. The community sources this file cites for the 75% figure describe the
+// shared form and do not cover him.
+export const PUPPET_MO_CHANCE = (ai) => (ai + 1) / 20;
 
 // Power [SOURCED]
 // [SOURCED: decompile — the battery counter (true name `battery life`; the
