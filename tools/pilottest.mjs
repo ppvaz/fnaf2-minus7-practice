@@ -145,8 +145,26 @@ export function run(opts = {}) {
 
   at(0, OPENING);
   let checks = 0, responses = 0, evictions = 0, syncs = 0;
-  const cycleAt = (k) => ms(7000 + k * 5000);
-  const cycleTable = opts.lateFlash ? CYCLE_LATE_FLASH : CYCLE;
+  // Where the cycle sits against the game's 5 s movement opportunities
+  // (`f % MO_FRAMES == 0`, counted from frame 0) is a free parameter, and it
+  // decides whether Balloon Boy is ever offered his last hop. g417 is his only
+  // monitor-gated edge, so an interval that lands while the cams are down
+  // cannot move him into the opening at all -- which is exactly what
+  // MINUS-7-STRATEGY.md 6 Phase A does by hand ("the interval passes with cams
+  // down -> BB cannot move"). At the shipped base of 7000 the interval falls at
+  // cycle phase 3000 ms, in the middle of the cams-up sweep, so he is offered
+  // the hop every single cycle.
+  const base = opts.base ?? 7000;
+  const cycleAt = (k) => ms(base + k * 5000);
+  let cycleTable = opts.lateFlash ? CYCLE_LATE_FLASH : CYCLE;
+  // Drop the per-cycle Golden Freddy flick. It is blind insurance: g336 only
+  // spawns him with the monitor up, g776 makes the mask the only clear, and
+  // g777/g778 make a raise or a hall flash with him present lethal -- so a
+  // pilot that cannot see him flicks every cycle just in case. A human simply
+  // looks. The flick is not free: it puts a mask animation (mmaskOff, 15
+  // frames) immediately before the hall flash, and on the device that is what
+  // stops the flash lighting at all.
+  if (opts.noFlick) cycleTable = cycleTable.filter(e => e[2] !== 'mask');
   for (let k = 0; k < cycles; k++) at(cycleAt(k), cycleTable);
 
   const releases = [];
@@ -183,7 +201,23 @@ export function run(opts = {}) {
     const k = Math.floor((f - cycleAt(0)) / ms(5000));
     const phase = f - cycleAt(k);
 
-    if (opts.vent && f > busyUntil && phase === ms(VENT_CHECK_AT) && k >= 0) {
+    // A blind, clocked Balloon Boy defence: run the mask response every N
+    // cycles whether or not anything has been seen. Minus 7 is a clocked
+    // strategy, and the phone can keep a schedule far more reliably than it
+    // can take an observation -- a device-side vent-light read measured 230 ms
+    // at best and never once completed inside the cams-down window in a live
+    // trial. His route is five hops at 75% per 5 s interval, so he needs about
+    // 6.7 intervals to reach the opening; a response that comes round often
+    // enough covers that without knowing where he is.
+    // Never on cycle 0: the opening sweep has not established Foxy cover yet,
+    // and a mask hold that early hands him the run at about 18 s every time.
+    if (opts.periodic && f > busyUntil && phase === 0 && k >= opts.periodic &&
+        k % opts.periodic === 0) {
+      responses++;
+      const end = f + ms(RESPONSE[RESPONSE.length - 1][0]) + ms(1400);
+      const kk = Math.ceil((end - cycleAt(0)) / ms(5000));
+      takeOver(f, cycleAt(kk), RESPONSE);
+    } else if (opts.vent && f > busyUntil && phase === ms(VENT_CHECK_AT) && k >= 0) {
       ventCheck(f);
     } else if (opts.evict && f > busyUntil && phase === ms(CAM5_PEEK_AT) && k >= 0
                && sim.camsUp && sim.bb.stage === C.BB_STAGES - 1) {

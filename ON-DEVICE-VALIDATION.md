@@ -356,6 +356,69 @@ observation rather than better timing: a CAM 05 peek during the sweep would
 see BB one move out (his 5th move
 is the only monitor-gated one) and let the pilot prepare instead of react.
 
+## Why the pilot cannot be given Balloon Boy on the phone yet (2026-08-20)
+
+The simulator answer -- see the vent-check rows above -- needs one observation
+per cycle. Four separate attempts to give the phone that observation, and what
+each measured:
+
+**1. Read the vent with a screenshot.** A branch has to be computed without a
+USB round trip, because the driver runs inside one adb shell so host latency
+cannot accumulate cycle drift. Measured on this device: host-side
+`screenstate.py --adb-fast` 692-785 ms; pulling the rectangle and averaging on
+the host 3300 ms; screencap + dd + awk entirely on the phone 404 ms, or 230 ms
+streaming with no file. `screencap` alone is 245 ms and is the floor. 230 ms
+fits the ~1.25 s between flashing the vent light and the raise -- but in a live
+trial the probe never once completed inside the cams-down window. Fourteen
+probes, fourteen `vent unavailable`. Unpinned it also pushed the schedule ~500
+ms late; pinned to one core at the lowest priority it kept time and returned
+nothing. `regionmean.sh`, `regionmean.py --verify`, `regionbench.sh`,
+`ventcal.sh` and `ventregion.py` are that measurement, and are worth keeping:
+the decode is cross-checked against PIL to within 4/255, and
+`ventregion.py --grid` does locate the vent light's effect (+32 and +27 at
+x 300-600, y 675-945).
+
+**2. Deny him the hop by phasing the cycle.** MINUS-7-STRATEGY.md 6 Phase A is
+"the interval passes with cams down -> BB cannot move", which reads like a pure
+timing fix needing no observation at all. It is not one. g417 consumes a
+*latched* A = 2, so cams-down defers his hop rather than cancelling it. Swept
+across every 200 ms of cycle phase (`tools/phasesweep.mjs`), the best phases cut
+BB-in-office from 200/200 to about 66/200 and none reach zero, with or without
+`--sync`.
+
+**3. Run the mask response on the clock instead of on a cue.**
+`tools/periodicsweep.mjs`. This works in the simulator: every third or fourth
+cycle keeps him out of the office entirely, 0/200, and the BB->Foxy chain with
+it. It is not a net win -- the response blinds the hall while the mask is on,
+so it trades BB's Foxy deaths for its own and dies sooner (median 30 s against
+48 s). On the device the response's mask hold did not register at all.
+
+**4. Drop the blind Golden Freddy flick to make room.** The flick is what
+squeezes the flash: g778 kills if the hall is flashed with him in the office
+and g776 makes a mask touch the only clear, so it must precede the flash, while
+g75/g84 mean the flash must follow the mask being fully off -- and mmaskOff is
+15 frames. A human just looks at the office and masks when he is there. A blind
+pilot cannot: without the flick, Golden Freddy takes 199/200 nights at a median
+of 13 s (`tools/flicksweep.mjs`). The flick is load-bearing and the squeeze is
+structural.
+
+**What the device runs did establish**, from `grade-minus7.py` over four
+trials: the shipped schedule lands roughly 3-5 visible hall flashes out of
+about 12 scheduled, and mask flicks register on roughly half of cycles. Since
+both the mask and the monitor are *toggles*, a dropped press does not cost one
+action -- it inverts the state for everything after it. Neither moving the
+flash clear of the mask animation, nor a single longer flash, nor 120 ms
+"firm" presses in place of fast-swipe's 60 ms improved the graded count, and
+the modified schedules died sooner than the shipped one (about 40 s against
+138 s). Those changes are therefore **not** in the shipped script; only the
+measurement tooling was kept.
+
+**The remaining blocker is not schedule tuning.** Golden Freddy has to be seen
+rather than prevented, and the phone has no working way to see him. The target
+mode is also still out of reach: `NIGHT` accepts only `continue` or `6th`, and
+Custom Night -- where 10/20 lives -- is locked behind beating 6th Night, so
+every trial here is a proxy.
+
 ## Next steps
 
 1. The synchronous cadence now holds for ~26 main cycles on the device (see
