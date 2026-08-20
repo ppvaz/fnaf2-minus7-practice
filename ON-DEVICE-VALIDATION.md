@@ -220,8 +220,17 @@ Target build confirmed on device: **v2.0.7** (versionCode 26, updated
 
 `tools/pilottest.mjs` replays `trial-minus7.sh`'s millisecond table in the
 sourced engine with no state reads, so schedule changes can be judged without
-spending a night on the phone. It reproduces the real failure exactly: the
-shipped blind schedule dies **200/200 to Balloon Boy walking in**.
+spending a night on the phone. The shipped blind schedule dies **200/200 to
+Foxy**.
+
+> **Corrected 2026-08-20.** This section previously read "dies 200/200 to
+> Balloon Boy walking in", and the table below carried the numbers that went
+> with it. `e8fcf2f` removed that death: the source has none there at all.
+> g96 forces `lit?` to zero every frame while BB is at 123 and g301/303 stop
+> the vent lights answering, so a BB who walks in is **permanent and harmless
+> by himself** — he takes the flashlight away and Foxy finishes the run. The
+> commit that changed the mechanism said so in its own message and did not
+> update this file. The numbers below are re-measured at `114b12f`.
 
 Adding the one observation the phone can actually make — flash the left vent
 light with the cams down and classify one screenshot (g289 draws BB at the
@@ -230,9 +239,35 @@ consecutive masked ticks:
 
 | Schedule | Result |
 | --- | --- |
-| blind, as shipped | 0/200 — every death is BB walking in |
-| + vent check | 0/200 — **no BB or Golden Freddy deaths left**; 72 Foxy, 108 the seven |
-| + Markiplier eviction | 0/200 — **worse**: 75 Foxy, more office deaths, min power 2253 vs 2583 |
+| blind, as shipped | 0/200 — every death is Foxy (105 no-blackout, 95 flashed after lock-on); min box 59%, min power 2460 |
+| + vent check | 0/200 — **no BB or Foxy deaths left**; 87 Golden Freddy on a raise, 113 the seven inside; min box 0%, min power 2454 |
+| + Markiplier eviction | 0/200 — **worse**: 177 Foxy, min power 2252 vs 2460; 200 evictions |
+
+Note what the vent check actually trades. It removes every BB death *and*
+every Foxy death, and pays for them with 87 Golden Freddy kills on the
+monitor raise plus 113 office deaths — and it drives min box from 59% to 0%.
+It is not a partial fix that needs tightening; it moves the whole failure
+somewhere else.
+
+### Device confirmation of the causal chain (2026-08-20)
+
+One 80-cycle run on the phone, `trial-minus7.sh minus7-fullnight-20260820 80`,
+Night 6. It died at **~138 s of the 420 s night** — the HUD still reads 1 AM —
+after roughly 26 main cycles, well past the six-cycle cadence that had been
+validated until now. The graded capture shows the corrected chain end to end:
+
+1. BB is already standing in the office at ~137.6 s, visible through the mask
+   eyeholes and then in the open office with his sign.
+2. The scripted mask flick runs anyway — mask-on 137496 ms, mask-off
+   137836 ms — because the schedule is open-loop and cannot know he is there.
+3. Both hall flashes fire on time, 138085 ms and 138445 ms, and **do nothing**:
+   BB has taken the flashlight, exactly as g96/g301/g303 describe.
+4. Withered Foxy comes down the unrepelled hall and kills. Static at ~139 s.
+
+So the phone reproduces the sim's Foxy death and the old "BB death" reading at
+once, and shows why they were ever confused: BB is the cause, Foxy is the
+killer, and only the second one is a death event. This also satisfies next
+step 2 manually — the frame before the static did identify the killer.
 
 **The eviction does not transfer to an open-loop pilot.** Spending the sourced
 700 frames of hall light only evicts Foxy if he is actually in the hall while
@@ -241,28 +276,50 @@ the 500-999 frame nap. Markiplier can arrange both because he hears BB's
 laughs and reads the hall; a pilot holding one vent screenshot per cycle knows
 neither, so it burns the power and takes the exposure anyway.
 
-What remains is structural, not a timing bug. Clearing BB costs about 8 s with
-the monitor down (Golden Freddy flick, hall flash, five masked ticks, raise,
-re-sweep), and the three stall cameras only stay held for 6.67 s — so one 5 s
-interval always lands uncovered. On PC the canonical strategy pays for this
-with the held flashlight straight through the mask; g75/g84 make that
-impossible here. Closing it needs a **second** observation rather than better
-timing: a CAM 05 peek during the sweep would see BB one move out (his 5th move
+**The "about 8 s" cost this section used to quote is withdrawn.** It was
+written before `74e0148` sourced the mask counter, and it priced the
+five-tick term at a flat 5.0 s. g907 increments v12 on the one-second event
+boundary, so five ticks span *four* boundaries and the cost depends on where
+the hold starts: 4.017 s if it becomes fully-on one frame before a boundary,
+5.000 s if it lands exactly on one. That is a full second of spread the flat
+figure hid, and the conclusion drawn from it — that the response overruns the
+6.67 s stall so "one 5 s interval always lands uncovered" — **does not
+follow and is not established.** The response's monitor-down portion is
+6.4 s against a 6.67 s hold, not 8 s against it.
+
+The pilot's `RESPONSE` table currently budgets the worst phase: mask on at
++800 ms, fully on by +1000, off at +6000, a flat 5.0 s hold that is never
+aligned to the boundary. Up to ~1 s of that is recoverable by phasing, and
+nobody has tried it.
+
+What *is* measured is the table above: the vent check does clear BB and Foxy,
+and still loses 200/200 — to Golden Freddy on the raise and to the seven
+inside. So the response is net-fatal for reasons the timing arithmetic never
+described. On PC the canonical strategy holds the flashlight straight through
+the mask; g75/g84 make that impossible here. The proposed fix is a **second**
+observation rather than better timing: a CAM 05 peek during the sweep would
+see BB one move out (his 5th move
 is the only monitor-gated one) and let the pilot prepare instead of react.
 
 ## Next steps
 
-1. Extend the validated synchronous cadence beyond six main cycles before
-   treating it as a full-night bot. Keep grading the selected-camera trace and
-   gauge; do not treat printed commands as accepted game input. `Continue`
-   currently points to Night 1, while 6th Night is the authorized quick testing
-   ground. Do not restore the held-light shortcut or asynchronous short swipes.
-2. Grab the frame before the static to auto-identify the killer. The
-   `gameover` state (red face + bright lower-center text) is implemented.
-3. Calibrate `windpct.py` against a deliberately empty-to-full capture if its
+1. The synchronous cadence now holds for ~26 main cycles on the device (see
+   above), not six — the schedule itself is not what fails. Keep grading the
+   selected-camera trace and gauge; do not treat printed commands as accepted
+   game input. `Continue` currently points to Night 1, while 6th Night is the
+   authorized quick testing ground. Do not restore the held-light shortcut or
+   asynchronous short swipes.
+2. Automate what was done by hand above: grab the frame before the static to
+   identify the killer. The `gameover` state (red face + bright lower-center
+   text) is implemented; the killer identification is not.
+3. Phase the `RESPONSE` mask hold to the one-second tick boundary and re-measure.
+   The sourced clear is 4.017-5.000 s depending on phase and the table currently
+   spends the worst case; this is the one cheap timing lever left, and it has
+   never been tried.
+4. Calibrate `windpct.py` against a deliberately empty-to-full capture if its
    approximate percentages will drive an interactive policy. Keep it out of
    the live Minus 7 loop unless the policy actually needs a branch.
-4. Longer term: beat 6th Night and unlock Custom Night, then use character-
+5. Longer term: beat 6th Night and unlock Custom Night, then use character-
    isolated stock runs. For reactive strategies, compare live CV against a
    separately signed, direct-state instrumentation build.
 
